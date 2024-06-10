@@ -157,3 +157,8 @@ func getIndex() (string, error) {
 	}
 	return string(b), nil
 }
+
+func TestHandler(w http.ResponseWriter, r *http.Request) {
+	res := &JsonResult{}
+	res.Data = "this is test Data"
+}
