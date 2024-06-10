@@ -1,9 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"time"
 
@@ -156,4 +158,126 @@ func getIndex() (string, error) {
 		return "", err
 	}
 	return string(b), nil
+}
+
+func TestHandler(w http.ResponseWriter, r *http.Request) {
+	res := &JsonResult{}
+
+	token, err := getAccessToken()
+	var p1 = "default1"
+	var p2 = "default2"
+
+	if err == nil {
+		p1, p2, _ = addDraft(token.AccessToken)
+	}
+
+	if err != nil {
+		res.Data = map[string]string{
+			"resp": err.Error(),
+			"body": p1,
+			"url":  p2,
+		}
+	} else {
+		res.Data = map[string]string{
+			"body": p1,
+			"url":  p2,
+		}
+	}
+
+	msg, err := json.Marshal(res)
+	if err != nil {
+		fmt.Fprint(w, "内部错误")
+		return
+	}
+
+	w.Header().Set("content-type", "application/json")
+	w.Write(msg)
+}
+
+type AccessTokenResp struct {
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+}
+
+func getAccessToken() (AccessTokenResp, error) {
+	client := &http.Client{}
+
+	// 创建HTTP请求
+	req, err := http.NewRequest("GET", "https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential", nil)
+	if err != nil {
+		panic(err)
+	}
+
+	q := req.URL.Query()
+	q.Add("grant_type", "client_credential")
+	q.Add("appid", "wxb3a518d1232e62d5")
+	q.Add("secret", "46fdcdec4ac0f86a113eda2cc83470a2")
+
+	req.URL.RawQuery = q.Encode()
+
+	// 发送HTTP请求
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close() // 确保关闭响应体
+
+	// 读取响应体
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	token := AccessTokenResp{}
+	err = json.Unmarshal(body, &token)
+
+	return token, err
+}
+
+func addDraft(token string) (string, string, error) {
+	client := &http.Client{}
+
+	var data = map[string][]interface{}{}
+	var content = map[string]interface{}{
+		"title":          "澳洲newest",
+		"digest":         "前几个字",
+		"content":        "礼物推荐-3",
+		"thumb_media_id": "IUHZ5Ned3t6_I_bpWRQx_3aGQ3ryMNp3fP4GDEd4tIj2S37ANxQ2vPPCHLk7F1xc",
+	}
+
+	data["articles"] = append(data["articles"], content)
+
+	bytesData, _ := json.Marshal(data)
+
+	log.Printf("addDraft param=%v", string(bytesData))
+
+	// 创建HTTP请求
+	req, err := http.NewRequest("POST", "https://api.weixin.qq.com/cgi-bin/draft/add", bytes.NewReader(bytesData))
+	if err != nil {
+		panic(err)
+	}
+
+	q := req.URL.Query()
+	q.Add("access_token", token)
+
+	req.URL.RawQuery = q.Encode()
+
+	// 发送HTTP请求
+	resp, err := client.Do(req)
+	if err != nil {
+		panic(err)
+	}
+
+	defer resp.Body.Close() // 确保关闭响应体
+
+	// 读取响应体
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+
+	log.Printf("addDraft body=%v", string(body))
+
+	return string(bytesData), string(body), nil
 }
